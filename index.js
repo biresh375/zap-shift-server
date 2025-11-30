@@ -5,6 +5,11 @@ require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const stripe = require("stripe")(process.env.STRIPE_SECRATE);
 const port = 3000;
+function generateTrackingId() {
+  const prefix = "TRK";
+  const random = Math.random().toString(36).substring(2, 10).toUpperCase();
+  return `${prefix}-${random}`;
+}
 //middlewere
 app.use(express.json());
 app.use(cors());
@@ -92,12 +97,14 @@ async function run() {
       const sessionId = req.query.session_id;
       const session = await stripe.checkout.sessions.retrieve(sessionId);
       console.log(session);
+      const TrackingId = generateTrackingId();
       if (session.payment_status === "paid") {
         const id = session.metadata.parcelId;
         const query = { _id: new ObjectId(id) };
         const update = {
           $set: {
             paymentStatus: "paid",
+            trakingId: TrackingId,
           },
         };
         const result = await parcelsCollection.updateOne(query, update);
@@ -111,12 +118,13 @@ async function run() {
           transectionId: session.payment_intent,
           paymentStatus: session.payment_status,
           paidAt: new Date(),
-          
         };
         if (session.payment_status === "paid") {
           const resultPayment = await paymentCollection.insertOne(payment);
           res.send({
             success: true,
+            trakingId: TrackingId,
+            transectionId: session.payment_intent,
             modifyParcel: result,
             paymentInfo: resultPayment,
           });
